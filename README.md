@@ -1,8 +1,8 @@
-To get the best battery life, we employ a few tricks:
- - run the part at 1MHz
+
+ - run the part at 8MHz
  - use low power mode
 
- Run the part at 1MHz
+ Run the part at 8MHz
  You need to reprogram the fuses. In the following example, I use the USBTiny programmer. You will of course
  need to replace that with whatever programmer you have (the -c option)
 
