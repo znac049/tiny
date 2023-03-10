@@ -106,10 +106,13 @@ inline void idle() {
 }
 
 void setup() {
-  fx[0] = new Effect(&level1, 0);
-  fx[1] = new Effect(&level2, 180);
-  fx[2] = new Effect(&level3, 360);
-  fx[3] = new Effect(&level4, 540);
+  const int numSteps = 3000;
+  const int quarterStep = numSteps/4;
+
+  fx[0] = new Effect(&level1, 0, numSteps);
+  fx[1] = new Effect(&level2, quarterStep, numSteps);
+  fx[2] = new Effect(&level3, quarterStep*2, numSteps);
+  fx[3] = new Effect(&level4, quarterStep*3, numSteps);
 
   //DDRB = 0x3f;  
   pinMode(CHANNEL1_PIN, OUTPUT);
@@ -167,7 +170,7 @@ void setup() {
 
 void idleFor(int mS) {
 #if 1
-  register int ticksToWait = mS * 51;
+  register int ticksToWait = mS * 30;
 
   systemTicks = 0;
   while (systemTicks < ticksToWait)

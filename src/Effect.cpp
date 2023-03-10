@@ -14,23 +14,28 @@ static int sineTable[] = {
   126, 126, 127, 127, 127, 128, 128, 128, 128, 128
 };
 
-Effect::Effect(volatile uint8_t *channelData, int firstStep) {
+Effect::Effect(volatile uint8_t *channelData, int firstStep, int nSteps) {
   level = channelData;
   stepNum = firstStep;
+  numSteps = nSteps;
 }
 
 void Effect::step() {
   if (stepNum < 90) {
     // Ramp down
-    *level = sineTable[90-stepNum]>>2;
+    *level = sineTable[90-stepNum]>>1;
   }
   else if (stepNum < 180) {
     // Ramp up
-    *level = sineTable[stepNum-90]>>2;
+    *level = sineTable[stepNum-90]>>1;
   }
 
   stepNum++;
-  if (stepNum > 720) {
+  if (stepNum >= numSteps) {
     stepNum = 0;
   }
+}
+
+int Effect::getNumSteps() {
+  return numSteps;
 }
