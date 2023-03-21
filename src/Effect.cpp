@@ -22,11 +22,11 @@ Effect::Effect(volatile uint8_t *channelData, int firstStep) {
 void Effect::step() {
   if (stepNum < 90) {
     // Ramp down
-    *level = sineTable[90-stepNum]>>2;
+    *level = sineTable[90-stepNum]>>1;
   }
   else if (stepNum < 180) {
     // Ramp up
-    *level = sineTable[stepNum-90]>>2;
+    *level = sineTable[stepNum-90]>>1;
   }
 
   stepNum++;

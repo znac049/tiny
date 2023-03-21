@@ -167,7 +167,7 @@ void setup() {
 
 void idleFor(int mS) {
 #if 1
-  register int ticksToWait = mS * 51;
+  register int ticksToWait = mS * 30;
 
   systemTicks = 0;
   while (systemTicks < ticksToWait)
