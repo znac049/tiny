@@ -8,6 +8,8 @@
 
 #define CLOCK_FREQUENCY 80000000
 
+#define HAS_IR 1
+
 #define PHI_1 0
 #define PHI_2 1
 
@@ -15,6 +17,49 @@
 #define CHANNEL2_PIN 0
 #define CHANNEL3_PIN 3
 #define CHANNEL4_PIN 2
+
+#if HAS_IR
+#define IR_PIN 1
+
+// receiver states
+#define STATE_IDLE     2
+#define STATE_MARK     3
+#define STATE_SPACE    4
+#define STATE_STOP     5
+
+#define RAWBUF 50 //76         // Length of raw duration buffer
+
+// Timer related
+#define CLKFUDGE 5        // fudge factor for clock interrupt overhead
+#define CLK 256           // max value for clock (timer 2)
+#define PRESCALE 4        // TIMER1 clock prescale
+#define SYSCLOCK 8000000  // default ATtiny clock
+#define USECPERTICK 50  // microseconds per clock interrupt tick
+
+// timer clocks per microsecond
+#define CLKSPERUSEC (SYSCLOCK/PRESCALE/1000000)   
+
+#define INIT_TIMER_COUNT1 (CLK - USECPERTICK*CLKSPERUSEC + CLKFUDGE)
+#define RESET_TIMER1 TCNT1 = INIT_TIMER_COUNT1
+
+// IR detector output is active low
+#define MARK  0
+#define SPACE 1
+
+#define _GAP 5000 // Minimum map between transmissions
+#define GAP_TICKS (_GAP/USECPERTICK)
+
+// information for the interrupt handler
+typedef struct {
+  uint8_t recvpin;           // pin for IR data from detector
+  uint8_t rcvstate;          // state machine
+  unsigned int timer;     // state timer, counts 50uS ticks.
+  unsigned int rawbuf[RAWBUF]; // raw data
+  uint8_t rawlen;         // counter of entries in rawbuf
+} irparams_t;
+
+volatile irparams_t irparams;
+#endif
 
 #define DEBUG_PIN 5
 
@@ -98,6 +143,70 @@ ISR(TIMER0_COMPA_vect) {
   }
 }
 
+#if HAS_IR
+ISR(TIM1_OVF_vect)
+{
+  // Reset Timer 1
+  TCNT1 = INIT_TIMER_COUNT1;
+
+  uint8_t irdata = (uint8_t)digitalRead(irparams.recvpin);
+
+  irparams.timer++; // One more 50us tick
+  if (irparams.rawlen >= RAWBUF) {
+    // Buffer overflow
+    irparams.rcvstate = STATE_STOP;
+  }
+  switch(irparams.rcvstate) {
+  case STATE_IDLE: // In the middle of a gap
+    if (irdata == MARK) {
+      if (irparams.timer < GAP_TICKS) {
+        // Not big enough to be a gap.
+        irparams.timer = 0;
+      } 
+      else {
+        // gap just ended, record duration and start recording transmission
+        irparams.rawlen = 0;
+        irparams.rawbuf[irparams.rawlen++] = irparams.timer;
+        irparams.timer = 0;
+        irparams.rcvstate = STATE_MARK;
+      }
+    }
+    break;
+    
+  case STATE_MARK: // timing MARK
+    if (irdata == SPACE) {   // MARK ended, record time
+      irparams.rawbuf[irparams.rawlen++] = irparams.timer;
+      irparams.timer = 0;
+      irparams.rcvstate = STATE_SPACE;
+    }
+    break;
+
+  case STATE_SPACE: // timing SPACE
+    if (irdata == MARK) { // SPACE just ended, record it
+      irparams.rawbuf[irparams.rawlen++] = irparams.timer;
+      irparams.timer = 0;
+      irparams.rcvstate = STATE_MARK;
+    } 
+    else { // SPACE
+      if (irparams.timer > GAP_TICKS) {
+        // big SPACE, indicates gap between codes
+        // Mark current code as ready for processing
+        // Switch to STOP
+        // Don't reset timer; keep counting space width
+        irparams.rcvstate = STATE_STOP;
+      } 
+    }
+    break;
+
+  case STATE_STOP: // waiting, measuring gap
+    if (irdata == MARK) { // reset gap timer
+      irparams.timer = 0;
+    }
+    break;
+  }
+}
+#endif
+
 inline void idle() {
   //cbi(MCUCR, SM0);
   //cbi(MCUCR, SM1);
@@ -167,6 +276,8 @@ void setup() {
   // Enable interrupts
   sei();
 }
+
+
 
 void idleFor(int mS) {
 #if 1
