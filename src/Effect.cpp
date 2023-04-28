@@ -2,7 +2,7 @@
 
 #include "Effect.h"
 
-static int sineTable[] = {
+const static PROGMEM int sineTable[] = {
   0, 2, 4, 7, 9, 11, 13, 16, 18, 20,
   22, 24, 27, 29, 31, 33, 35, 37, 40, 42,
   44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 
@@ -21,13 +21,23 @@ Effect::Effect(volatile uint8_t *channelData, int firstStep, int nSteps) {
 }
 
 void Effect::step() {
+  if (blackout) {
+    *level = 0;
+    return;
+  }
+  
   if (stepNum < 90) {
     // Ramp down
-    *level = sineTable[90-stepNum]>>1;
+    //*level = sineTable[90-stepNum]>>1;
+    *level = pgm_read_word_near(sineTable + (90 - stepNum));
   }
   else if (stepNum < 180) {
     // Ramp up
-    *level = sineTable[stepNum-90]>>1;
+    //*level = sineTable[stepNum-90]>>1;
+    *level = pgm_read_word_near(sineTable + (stepNum - 90));
+  }
+  else if (stepNum > (numSteps-200)) {
+    *level = 0;
   }
 
   stepNum++;
@@ -38,4 +48,8 @@ void Effect::step() {
 
 int Effect::getNumSteps() {
   return numSteps;
+}
+
+void Effect::toggle() {
+  blackout = (blackout == 0)?1:0;
 }

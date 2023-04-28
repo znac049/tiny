@@ -6,9 +6,7 @@
 
 #include "Effect.h"
 
-#define CLOCK_FREQUENCY 80000000
-
-#define HAS_IR 1
+#define HAS_IR 0
 
 #define PHI_1 0
 #define PHI_2 1
@@ -27,7 +25,7 @@
 #define STATE_SPACE    4
 #define STATE_STOP     5
 
-#define RAWBUF 50 //76         // Length of raw duration buffer
+#define RAWBUF 76         // Length of raw duration buffer
 
 // Timer related
 #define CLKFUDGE 5        // fudge factor for clock interrupt overhead
@@ -49,19 +47,58 @@
 #define _GAP 5000 // Minimum map between transmissions
 #define GAP_TICKS (_GAP/USECPERTICK)
 
+#define ERR 0
+#define DECODED 1
+
+// Values for decode_type
+#define NEC 1
+#define UNKNOWN -1
+
+#define NEC_BITS 32
+
+// pulse parameters in usec
+#define NEC_HDR_MARK	9000
+#define NEC_HDR_SPACE	4500
+#define NEC_BIT_MARK	560
+#define NEC_ONE_SPACE	1600
+#define NEC_ZERO_SPACE	560
+#define NEC_RPT_SPACE	2250
+
+#define LTOL (1.0 - TOLERANCE/100.) 
+#define UTOL (1.0 + TOLERANCE/100.) 
+
+#define TOLERANCE 25  // percent tolerance in measurements
+#define TICKS_LOW(us) (int) (((us)*LTOL/USECPERTICK))
+#define TICKS_HIGH(us) (int) (((us)*UTOL/USECPERTICK + 1))
+
+// Marks tend to be 100us too long, and spaces 100us too short
+// when received due to sensor lag.
+#define MARK_EXCESS 100
+#define MATCH(measured_ticks, desired_us) ((measured_ticks) >= TICKS_LOW(desired_us) && (measured_ticks) <= TICKS_HIGH(desired_us))
+#define MATCH_MARK(measured_ticks, desired_us) MATCH(measured_ticks, (desired_us) + MARK_EXCESS)
+#define MATCH_SPACE(measured_ticks, desired_us) MATCH((measured_ticks), (desired_us) - MARK_EXCESS)
+
+// Decoded value for NEC when a repeat code is received
+#define REPEAT 0xffffffff
+
 // information for the interrupt handler
 typedef struct {
-  uint8_t recvpin;           // pin for IR data from detector
   uint8_t rcvstate;          // state machine
   unsigned int timer;     // state timer, counts 50uS ticks.
   unsigned int rawbuf[RAWBUF]; // raw data
   uint8_t rawlen;         // counter of entries in rawbuf
 } irparams_t;
 
+typedef struct {
+  int decode_type; // NEC, SONY, RC5, UNKNOWN
+  unsigned long value; // Decoded value
+  int bits; // Number of bits in decoded value
+  volatile unsigned int *rawbuf; // Raw intervals in .5 us ticks
+  int rawlen; // Number of records in rawbuf.
+} decode_results_t;
+
 volatile irparams_t irparams;
 #endif
-
-#define DEBUG_PIN 5
 
 // ATtiny85 Pin map
 //                        +-\/-+
@@ -96,8 +133,6 @@ ISR(TIMER0_COMPA_vect) {
 
   pwmTicks++;
   systemTicks++;
-
-  digitalWrite(DEBUG_PIN, pwmTicks & 1);
 
   // Reset counter
   TCNT0 = 0;
@@ -149,7 +184,7 @@ ISR(TIM1_OVF_vect)
   // Reset Timer 1
   TCNT1 = INIT_TIMER_COUNT1;
 
-  uint8_t irdata = (uint8_t)digitalRead(irparams.recvpin);
+  uint8_t irdata = (uint8_t)digitalRead(IR_PIN);
 
   irparams.timer++; // One more 50us tick
   if (irparams.rawlen >= RAWBUF) {
@@ -215,7 +250,7 @@ inline void idle() {
 }
 
 void setup() {
-  const int numSteps = 3000;
+  const int numSteps = 750;
   const int quarterStep = numSteps/4;
 
   fx[0] = new Effect(&level1, 0, numSteps);
@@ -229,8 +264,10 @@ void setup() {
   pinMode(CHANNEL3_PIN, OUTPUT);
   pinMode(CHANNEL4_PIN, OUTPUT);
 
-  pinMode(DEBUG_PIN, OUTPUT);
-  
+#if HAS_IR
+  pinMode(IR_PIN, INPUT);
+#endif  
+
   // All outputs on
   //PORTB = 0x00;
   digitalWrite(CHANNEL1_PIN, 1);
@@ -269,63 +306,138 @@ void setup() {
   // Set up the timer compare registers for about 51.2KHz
   OCR0A = 160;
   
-  // Enable timer 1 compare interrupt A
+  // Enable timer 0 compare interrupt A
   TIMSK = 0;
   sbi(TIMSK, OCIE0A); 
+
+#if HAS_IR
+  // Initialise state
+  irparams.rcvstate = STATE_IDLE;
+  irparams.timer = 0;
+  irparams.rawlen=0;
+
+  // Setup Timer 1
+
+  // Prescale /4 (8M/4 = 0.5 microseconds per tick)
+  // Therefore, the timer interval can range from 0.5 to 128 microseconds
+  // depending on the reset value (255 to 0)
+  TCCR1 = _BV(CS11) | _BV(CS10);
+
+  // enable eimer 1 overflow interrupt
+  //TIMSK |= _BV(TOIE1);
+  sbi(TIMSK, TOIE1);
+
+  RESET_TIMER1;
+#endif
 
   // Enable interrupts
   sei();
 }
 
+#if HAS_IR
+long decodeNEC(decode_results_t *results) {
+  long data = 0;
+  int offset = 1; // Skip first space
+  // Initial mark
+  if (!MATCH_MARK(results->rawbuf[offset], NEC_HDR_MARK)) {
+    return ERR;
+  }
+  offset++;
+  // Check for repeat
+  if (irparams.rawlen == 4 &&
+    MATCH_SPACE(results->rawbuf[offset], NEC_RPT_SPACE) &&
+    MATCH_MARK(results->rawbuf[offset+1], NEC_BIT_MARK)) {
+    results->bits = 0;
+    results->value = REPEAT;
+    results->decode_type = NEC;
+    return DECODED;
+  }
+  if (irparams.rawlen < 2 * NEC_BITS + 4) {
+    return ERR;
+  }
+  // Initial space  
+  if (!MATCH_SPACE(results->rawbuf[offset], NEC_HDR_SPACE)) {
+    return ERR;
+  }
+  offset++;
+  for (int i = 0; i < NEC_BITS; i++) {
+    if (!MATCH_MARK(results->rawbuf[offset], NEC_BIT_MARK)) {
+      return ERR;
+    }
+    offset++;
+    if (MATCH_SPACE(results->rawbuf[offset], NEC_ONE_SPACE)) {
+      data = (data << 1) | 1;
+    } 
+    else if (MATCH_SPACE(results->rawbuf[offset], NEC_ZERO_SPACE)) {
+      data <<= 1;
+    } 
+    else {
+      return ERR;
+    }
+    offset++;
+  }
+  // Success
+  results->bits = NEC_BITS;
+  results->value = data;
+  results->decode_type = NEC;
+  return DECODED;
+}
 
+int decode(decode_results_t *results) {
+  results->rawbuf = irparams.rawbuf;
+  results->rawlen = irparams.rawlen;
+  if (irparams.rcvstate != STATE_STOP) {
+    return ERR;
+  }
+
+  if (decodeNEC(results)) {
+    return DECODED;
+  }
+
+  if (results->rawlen >= 6) {
+    // Only return raw buffer if at least 6 bits
+    results->decode_type = UNKNOWN;
+    results->bits = 0;
+    results->value = 0;
+    return DECODED;
+  }
+  // Throw away and start over
+  irparams.rcvstate = STATE_IDLE;
+  irparams.rawlen=0;
+
+  return ERR;
+}
+#endif
 
 void idleFor(int mS) {
-#if 1
   register int ticksToWait = mS * 30;
 
   systemTicks = 0;
   while (systemTicks < ticksToWait)
     idle(); 
-#else
-  delay(mS);
-#endif
 }
 
 void loop() {
-#if 0
-  while (1) {
-    digitalWrite(0, 0);
-    digitalWrite(2, 1);
-    digitalWrite(3, 1);
-    digitalWrite(4, 0);
-
-    idleFor(1000);
-
-    digitalWrite(0, 1);
-    digitalWrite(2, 0);
-    digitalWrite(3, 0);
-    digitalWrite(4, 1);
-
-    idleFor(1000);
-  }
-#else
-  /*while(1) {
-    while (level1 < 128) {
-      level1++;
-      idleFor(10);
-    }
-
-    while (level1 > 0) {
-      level1--;
-      idleFor(10);
-    }
-  }*/
   while (1) {
     for (int i=0; i<4; i++) {
       fx[i]->step();
     }
 
+#if HAS_IR
+    if (irparams.rcvstate == STATE_STOP) {
+      decode_results_t ir;
+
+      //if (decode(&ir) == DECODED) {
+        decode(&ir);
+        for (int i=0; i<4; i++) {
+          fx[i]->toggle();
+        }
+      //}
+      irparams.rcvstate = STATE_IDLE;
+      irparams.rawlen = 0;
+    }
+#endif
+
     idleFor(6);
   }
-#endif
 }
