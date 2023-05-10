@@ -28,22 +28,25 @@ inline void idle() {
 
 void setup()
 {
+#ifdef HAS_HBRIDGE
   const int numSteps = 750;
   const int quarterStep = numSteps/4;
+#endif
 
+#ifdef UNO
   Serial.begin(38400);
-
-  Serial.println("Starting Wedding Lights controller");
+  DBGMSG("Starting Wedding Lights controller");
+#endif
 
 #ifdef HAS_HBRIDGE
   fx[0] = new Effect(&level1, 0, numSteps);
   fx[1] = new Effect(&level2, quarterStep, numSteps);
   fx[2] = new Effect(&level3, quarterStep*2, numSteps);
   fx[3] = new Effect(&level4, quarterStep*3, numSteps);
-#endif
-
+#else
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
   // Disable interrupts while we set things up
   cli();
@@ -61,7 +64,7 @@ void setup()
 
 #ifdef ATTINY
   // AtTiny has all sorts of crazy places it can be clocked from
-  // We just want to clock from the internal 8MHz clock
+  // We just want to clock from the internal 16MHz clock
   cbi(PLLCSR, PCKE);
 #endif
  
@@ -113,28 +116,35 @@ void loop() {
             // ON button
             case 1086259455:
             case 16753245:
-              Serial.println("ON");
+              DBGMSG("ON"); DBGNL;
+#ifdef HAS_HBRIDGE
+              for (int i=0; i<4; i++) {
+                fx[i]->blackout = 0;
+              }
+#else
               digitalWrite(LED_BUILTIN, HIGH);
+#endif
               break;
 
             // OFF button
             case 1086275775:
             case 16769565:
-              Serial.println("OFF");
+              DBGMSG("OFF\n");
+#ifdef HAS_HBRIDGE
+              for (int i=0; i<4; i++) {
+                fx[i]->blackout = 1;
+              }
+#else
               digitalWrite(LED_BUILTIN, LOW);
+#endif
               break;
 
             default:
-              Serial.print("Button value: "); Serial.println(button);
+              DBGMSG("Button value: "); DBGMSG(button); DBGNL;
               break;
           }
         }
 
-#ifdef HAS_HBRIDGE
-        for (int i=0; i<4; i++) {
-          fx[i]->toggle();
-        }
-#endif
       }
 
       irparams.rcvstate = STATE_IDLE;

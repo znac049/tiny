@@ -100,7 +100,7 @@ void init_timer1()
   // Therefore, the timer interval can range from 0.5 to 128 microseconds
   // depending on the reset value (255 to 0)
 #ifdef ATTINY
-  TCCR1 = _BV(CS112 | _BV(CS10);    // Clock / 8
+  TCCR1 = _BV(CS12);                // Clock / 8
 #else
   TCCR1A = 0;
   TCCR1B = _BV(CS11);               // Clock / 8

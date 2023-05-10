@@ -31,12 +31,12 @@ ISR(TIMER0_COMPA_vect) {
     if (phase == PHI_1) {
       phase = PHI_2;
       //PORTB = 0x0c;
-      PORTB = _BV(CHANNEL1_PIN_A) | _BV(CHANNEL2_PIN_A);
+      PORTB = _BV(CHANNEL1_PIN_B) | _BV(CHANNEL2_PIN_B);
     }
     else {
       phase = PHI_1;
       //PORTB = 0x11;
-      PORTB = _BV(CHANNEL1_PIN_B) | _BV(CHANNEL2_PIN_B);
+      PORTB = _BV(CHANNEL1_PIN_A) | _BV(CHANNEL2_PIN_A);
     }
   }
 
@@ -47,13 +47,13 @@ ISR(TIMER0_COMPA_vect) {
     }
     if (pwmTicks > level2) {
       //cbi(PINB, CHANNEL1_PIN_B);
-      digitalWrite(CHANNEL1_PIN_B, 0);
+      digitalWrite(CHANNEL2_PIN_A, 0);
     }
   }
   else {
     if (pwmTicks > level3) {
       //cbi(PINB, CHANNEL2_PIN_A);
-      digitalWrite(CHANNEL2_PIN_A, 0);
+      digitalWrite(CHANNEL1_PIN_B, 0);
     }
     if (pwmTicks > level4) {
       //cbi(PINB, CHANNEL2_PIN_B);

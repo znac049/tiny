@@ -49,7 +49,3 @@ void Effect::step() {
 int Effect::getNumSteps() {
   return numSteps;
 }
-
-void Effect::toggle() {
-  blackout = (blackout == 0)?1:0;
-}

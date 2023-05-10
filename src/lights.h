@@ -8,6 +8,9 @@
 # define CHANNEL2_PIN_A 3
 # define CHANNEL2_PIN_B 2
 # define IR_PIN 8
+
+# define DBGMSG(msg) Serial.print(msg)
+# define DBGNL DBGMSG("\n")
 #elif defined(ATTINY)
 # define SERIAL_RX_PIN 4
 # define SERIAL_TX_PIN 5
@@ -20,11 +23,14 @@
 # define CHANNEL2_PIN_B 1
 
 # define IR_PIN 0
+
+# define DBGMSG(msg) 
+# define DBGNL
 #else
 # error Unsupported board
 #endif
 
-#undef HAS_HBRIDGE
+#define HAS_HBRIDGE
 #define HAS_IR
 
 
