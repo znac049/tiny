@@ -109,9 +109,9 @@ void init_timer1()
 
   // Enable Timer 1 overflow interrupt
 #ifdef ATTINY
-  sbi(TIMSK, TOIE1);
+  TIMSK |= _BV(TOIE1);
 #else
-  TIMSK1 = _BV(TOIE1);
+  TIMSK1 |= _BV(TOIE1);
 #endif
 
   // Reset Timer 1

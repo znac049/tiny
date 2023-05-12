@@ -3,24 +3,32 @@
 #if defined(UNO)
 # define SYSCLOCK 16000000L  // default UNO clock
 
-# define CHANNEL1_PIN_A 5
-# define CHANNEL1_PIN_B 4
-# define CHANNEL2_PIN_A 3
-# define CHANNEL2_PIN_B 2
+# define CHANNEL1_PIN_A 12
+# define CHANNEL1_PIN_B 11
+# define CHANNEL2_PIN_A 10
+# define CHANNEL2_PIN_B 9
+
+# define CHANNEL1_PIN_A_MASK (0b00010000)
+# define CHANNEL1_PIN_B_MASK (0b00001000)
+# define CHANNEL2_PIN_A_MASK (0b00000100)
+# define CHANNEL2_PIN_B_MASK (0b00000010)
+
 # define IR_PIN 8
 
 # define DBGMSG(msg) Serial.print(msg)
 # define DBGNL DBGMSG("\n")
 #elif defined(ATTINY)
-# define SERIAL_RX_PIN 4
-# define SERIAL_TX_PIN 5
-
 # define SYSCLOCK 16000000L  // Using internal PLL - see README for notes on fuses
 
 # define CHANNEL1_PIN_A 4
 # define CHANNEL1_PIN_B 3
 # define CHANNEL2_PIN_A 2
 # define CHANNEL2_PIN_B 1
+
+# define CHANNEL1_PIN_A_MASK (0b00010000)
+# define CHANNEL1_PIN_B_MASK (0b00001000)
+# define CHANNEL2_PIN_A_MASK (0b00000100)
+# define CHANNEL2_PIN_B_MASK (0b00000010)
 
 # define IR_PIN 0
 
@@ -42,11 +50,13 @@
 //                  GND  4|    |5  PB0 (D 0) pwm0 
 //                        +----+
 
+#if 0
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
 #endif
 #ifndef sbi
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
 #endif
 
 #ifdef HAS_IR
