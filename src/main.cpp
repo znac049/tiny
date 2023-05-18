@@ -122,9 +122,6 @@ void loop() {
             case 16753245:
               running = 1;
               DBGMSG("ON"); DBGNL;
-#ifdef HAS_HBRIDGE
-              //start_hbridge();
-#endif
 #ifdef UNO
               digitalWrite(LED_BUILTIN, HIGH);
 #endif
